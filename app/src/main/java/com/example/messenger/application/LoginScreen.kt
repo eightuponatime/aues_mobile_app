@@ -218,25 +218,6 @@ fun LoginScreen(navController: NavController) {
     }
 }
 
-@Composable
-fun TypingText(text: String, modifier: Modifier = Modifier) {
-    var visibleText by remember { mutableStateOf("") }
-
-    LaunchedEffect(text) {
-        for (i in text.indices) {
-            delay(50) // Задержка между появлением символов (можете изменить)
-            visibleText = text.substring(0, i + 1)
-        }
-    }
-
-    Text(
-        text = visibleText,
-        modifier = modifier,
-        fontSize = 16.sp, // Измените на ваш размер шрифта
-        fontFamily = FontFamily.Default // Измените на ваш шрифт
-    )
-}
-
 suspend fun checkCredentials(username: String, password: String): Boolean {
     return withContext(Dispatchers.IO) {
         val user = DatabaseManager.getDatabase().userDao().getUserByUsername(username)

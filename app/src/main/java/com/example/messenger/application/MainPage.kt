@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
+
 package com.example.messenger.application
 
 
@@ -19,20 +21,51 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.ExitToApp
+import androidx.compose.material.icons.filled.Face
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MediumTopAppBar
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.NavigationBarItemColors
+import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.NavigationDrawerItemColors
+import androidx.compose.material3.NavigationDrawerItemDefaults
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.contentColorFor
+import androidx.compose.material3.rememberDrawerState
+import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
@@ -40,11 +73,14 @@ import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.example.messenger.R
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
 fun MainPage(
@@ -64,6 +100,17 @@ fun MainPage(
         Color(0xFFe2eafc),
         Color(0xFFedf2fb)
     )
+
+    val bgradientColorList = listOf(
+        Color(0xFFabc4ff),
+        Color(0xFFb6ccfe),
+        Color(0xFFedf2fb),
+        Color(0xFFe2eafc),
+        Color(0xFFd7e3fc),
+        Color(0xFFccdbfd),
+        Color(0xFFc1d3fe),
+    )
+    var showDialog by remember { mutableStateOf(false) }
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -74,55 +121,168 @@ fun MainPage(
                 )
             )
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(8.dp),
-            contentAlignment = Alignment.TopCenter
-        ) {
-            Column(
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                CreateImageProfile()
-                Spacer(Modifier.height(40.dp))
-                CreateInfo(username, name, group)
-                Spacer(Modifier.height(40.dp))
-                Button(
-                    onClick = { /* Handle for user's schedule */ },
-                    colors = ButtonDefaults.buttonColors(Color(0xFF7289DA)),
-                    modifier = Modifier
-                        .align(Alignment.CenterHorizontally)
-                        .fillMaxWidth()
-                        .height(50.dp)
+        val drawerState = rememberDrawerState(DrawerValue.Closed)
+        val scope = rememberCoroutineScope()
+        val menuItems = listOf(
+            MenuItem(Icons.Default.Home, "Main Page", onClick =
+            {navController.navigate("main/$username/$name/$group")}),
+            MenuItem(Icons.Default.Face, "Friends", onClick = {}) ,
+            MenuItem(Icons.Default.Email, "Messages", onClick = {})
+        )
+        val selectedItem = remember { mutableStateOf(menuItems[0]) }
+
+        ModalNavigationDrawer(
+            drawerState = drawerState,
+            drawerContent = {
+                ModalDrawerSheet(
+                    drawerContainerColor = Color(0xFFc1d3fe)
                 ) {
-                    Text(
-                        text = "Schedule",
-                        color = textColor,
-                        fontSize = 18.sp,
-                        fontFamily = FontFamily(Font(R.font.dank_mono))
-                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                brush = GradientBackgroundBrush(
+                                    isVerticalGradient = true,
+                                    colors = bgradientColorList
+                                )
+                            )
+                            .padding(vertical = 12.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CreateImageDrawer()
+                    }
+
+                    Spacer(Modifier.height(12.dp))
+
+                    menuItems.forEach { item ->
+                        NavigationDrawerItem(
+                            icon = { Icon(item.icon, contentDescription = null) },
+                            label = { Text(item.label) },
+                            selected = item == selectedItem.value,
+                            colors = NavigationDrawerItemDefaults.colors(
+                                selectedContainerColor = Color(0xFF7289DA),
+                                unselectedContainerColor = Color(0xFF7289DA),
+                                selectedIconColor = Color.White,
+                                unselectedIconColor = Color.White,
+                                selectedTextColor = Color.White,
+                                unselectedTextColor = Color.White
+                            ),
+                            onClick = {
+                                scope.launch { drawerState.close() }
+                                selectedItem.value = item
+                                item.onClick()
+                            },
+                            modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
                 }
-                Spacer(Modifier.height(8.dp))
-                Button(
-                    onClick = { /* Handle for user's task ccalendar */ },
-                    colors = ButtonDefaults.buttonColors(Color(0xFF7289DA)),
-                    modifier = Modifier
-                        .align(Alignment.CenterHorizontally)
-                        .fillMaxWidth()
-                        .height(50.dp)
-                ) {
-                    Text(
-                        text = "Task calendar",
-                        color = textColor,
-                        fontSize = 18.sp,
-                        fontFamily = FontFamily(Font(R.font.dank_mono))
-                    )
+            },
+            content = {
+                val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(rememberTopAppBarState())
+                Scaffold(
+                    modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+                    topBar = {
+                        CenterAlignedTopAppBar(
+                            colors = TopAppBarDefaults.largeTopAppBarColors(
+                                containerColor = Color(0xFF7289DA),
+                                titleContentColor = Color.White,
+                            ),
+                            title = {
+                                Text(
+                                    text = "Aues Portal",
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    color = Color.White,
+                                    fontFamily = FontFamily(Font(R.font.dank_mono))
+                                )
+                            },
+                            navigationIcon = {
+                                IconButton(onClick = {scope.launch { drawerState.open() } }) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Menu,
+                                        contentDescription = "Localized description",
+                                        tint = Color.White
+                                    )
+                                }
+                            },
+                            actions = {
+                                IconButton(onClick = { navController.navigate("login") }) {
+                                    Icon(
+                                        imageVector = Icons.Filled.ExitToApp,
+                                        contentDescription = "",
+                                        tint = Color.White
+                                    )
+                                }
+                            },
+                            scrollBehavior = scrollBehavior
+                        )
+                    },
+                ) { innerPadding ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(innerPadding)
+                            .background(
+                                brush = GradientBackgroundBrush(
+                                    isVerticalGradient = true,
+                                    colors = gradientColorList
+                                )
+                            ),
+                        contentAlignment = Alignment.TopCenter
+                    ) {
+                        Column(
+                            verticalArrangement = Arrangement.Center,
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            CreateImageProfile()
+                            Spacer(Modifier.height(40.dp))
+                            CreateInfo(username, name, group)
+                            Spacer(Modifier.height(40.dp))
+                            Button(
+                                onClick = { /* Handle for user's schedule */ },
+                                colors = ButtonDefaults.buttonColors(Color(0xFF7289DA)),
+                                modifier = Modifier
+                                    .align(Alignment.CenterHorizontally)
+                                    .fillMaxWidth()
+                                    .height(50.dp)
+                            ) {
+                                Text(
+                                    text = "Schedule",
+                                    color = textColor,
+                                    fontSize = 18.sp,
+                                    fontFamily = FontFamily(Font(R.font.dank_mono))
+                                )
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            Button(
+                                onClick = { /* Handle for user's task ccalendar */ },
+                                colors = ButtonDefaults.buttonColors(Color(0xFF7289DA)),
+                                modifier = Modifier
+                                    .align(Alignment.CenterHorizontally)
+                                    .fillMaxWidth()
+                                    .height(50.dp)
+                            ) {
+                                Text(
+                                    text = "Task calendar",
+                                    color = textColor,
+                                    fontSize = 18.sp,
+                                    fontFamily = FontFamily(Font(R.font.dank_mono))
+                                )
+                            }
+                        }
+                    }
                 }
             }
-        }
+        )
     }
 }
+
+data class MenuItem(
+    val icon: ImageVector,
+    val label: String,
+    val onClick: () -> Unit,
+)
 
 @Composable
 private fun CreateImageProfile() {
@@ -146,6 +306,26 @@ private fun CreateImageProfile() {
 }
 
 @Composable
+private fun CreateImageDrawer() {
+    Surface(
+        modifier = Modifier
+            .size(200.dp)
+            .padding(5.dp),
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+        shadowElevation = 4.dp
+    ) {
+        Image(
+            painter = painterResource(id = R.drawable.profile_pic),
+            contentDescription = "profile image",
+            modifier = Modifier.size(200.dp),
+            contentScale = ContentScale.Crop
+        )
+
+    }
+}
+
+@Composable
 private fun CreateInfo(
     username: String,
     name: String,
@@ -153,45 +333,58 @@ private fun CreateInfo(
 ) {
     Column {
         Row(modifier = Modifier.align(Alignment.Start)) {
-            Text(color = Color(0xFFf8961e),
-                fontSize = 24.sp,
-                fontFamily = FontFamily(Font(R.font.ubuntu_mono)),
-                text = "username:~$ ")
-            Text(color = Color.White,
-                fontSize = 24.sp,
-                fontFamily = FontFamily(Font(R.font.ubuntu_mono)),
-                text = username)
+            TypingTextConsole("username:~$ ")
+            Spacer(Modifier.width(8.dp))
+            TypingText(username)
         }
 
         Row {
-            Text(
-                color = Color(0xFFf8961e),
-                fontSize = 24.sp,
-                fontFamily = FontFamily(Font(R.font.ubuntu_mono)),
-                text = "name:~$ "
-            )
+            TypingTextConsole("name:~$ ")
             Spacer(Modifier.width(8.dp))
-            Text(
-                text = "your name",
-                fontSize = 24.sp,
-                fontFamily = FontFamily(Font(R.font.ubuntu_mono)),
-                color = Color.White
-            )
+            TypingText("user's name")
         }
         Row() {
-            Text(
-                color = Color(0xFFf8961e),
-                fontSize = 24.sp,
-                fontFamily = FontFamily(Font(R.font.ubuntu_mono)),
-                text = "group:~$ "
-            )
+            TypingTextConsole("group:~$ ")
             Spacer(Modifier.width(8.dp))
-            Text(
-                text = "your group",
-                fontSize = 24.sp,
-                fontFamily = FontFamily(Font(R.font.ubuntu_mono)),
-                color = Color.White
-            )
+            TypingText("user's group")
         }
     }
+}
+
+@Composable
+fun TypingTextConsole(text: String) {
+    var visibleText by remember { mutableStateOf("") }
+
+    LaunchedEffect(text) {
+        for (i in text.indices) {
+            delay(50) // Задержка между появлением символов (можете изменить)
+            visibleText = text.substring(0, i + 1)
+        }
+    }
+
+    Text(
+        color = Color(0xFFf8961e),
+        fontSize = 24.sp,
+        fontFamily = FontFamily(Font(R.font.ubuntu_mono)),
+        text = visibleText
+    )
+}
+
+@Composable
+fun TypingText(text: String) {
+    var visibleText by remember { mutableStateOf("") }
+
+    LaunchedEffect(text) {
+        for (i in text.indices) {
+            delay(50) // Задержка между появлением символов (можете изменить)
+            visibleText = text.substring(0, i + 1)
+        }
+    }
+
+    Text(
+        text = visibleText,
+        fontSize = 24.sp,
+        fontFamily = FontFamily(Font(R.font.ubuntu_mono)),
+        color = Color.White
+    )
 }
