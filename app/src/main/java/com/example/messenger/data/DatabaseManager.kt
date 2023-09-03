@@ -4,16 +4,16 @@ import android.content.Context
 import androidx.room.Room
 
 object DatabaseManager {
-    private lateinit var database: AppDatabase
+    private lateinit var database: MyAppDatabase
 
     fun initialize(context: Context) {
         database = Room.databaseBuilder(
             context.applicationContext,
-            AppDatabase::class.java, "app-database"
+            MyAppDatabase::class.java, "app-database"
         ).build()
     }
 
-    fun getDatabase(): AppDatabase {
+    fun getDatabase(): MyAppDatabase {
         if (!::database.isInitialized) {
             throw IllegalStateException("Database is not initialized. Call initialize() first.")
         }
