@@ -1,4 +1,4 @@
-package com.example.messenger.application
+package com.example.messenger.application.StarterPage
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -18,6 +18,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -33,6 +34,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
@@ -40,14 +42,11 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.example.messenger.R
-import com.example.messenger.data.AppDatabase
 import com.example.messenger.data.DatabaseManager
-import com.example.messenger.network.ApiClient.apiService
+import com.example.messenger.network.ApiClient
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -55,10 +54,6 @@ import kotlinx.coroutines.withContext
 fun LoginScreen(navController: NavController) {
     val textColor = Color.White
     val buttonColor = Color(0xFF7289DA)
-    var isChecked by remember {
-        mutableStateOf(false)
-    }
-    val viewModel: LoginViewModel = viewModel(factory = LoginViewModelFactory(apiService = apiService))
     val gradientColorList = listOf(
         Color(0xFFA2D2FF),
         Color(0xFFBDE0FE),
@@ -97,7 +92,7 @@ fun LoginScreen(navController: NavController) {
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = "aues portal",
+                    text = "aues scraper",
                     color = textColor,
                     fontSize = 30.sp,
                     fontFamily = FontFamily(Font(R.font.dank_mono))
@@ -116,16 +111,25 @@ fun LoginScreen(navController: NavController) {
             ) {
                 Spacer(modifier = Modifier.height(16.dp))
 
+
+                val context = LocalContext.current
+                val userManager = remember { UserManager(context) }
+
                 val usernameState = remember {
-                    mutableStateOf("")
+                    mutableStateOf(userManager.getUsername() ?: "")
                 }
                 UsernameTextField(textColor, usernameState)
                 Spacer(modifier = Modifier.height(8.dp))
 
                 val passwordState = remember {
-                    mutableStateOf("")
+                    mutableStateOf(userManager.getPassword() ?: "")
                 }
                 PasswordTextField(textColor, passwordState)
+
+                var isChecked by remember {
+                    mutableStateOf(userManager.isRememberMeEnabled())
+                }
+
                 Spacer(Modifier.height(4.dp))
                 Row(
                     verticalAlignment = Alignment.CenterVertically
@@ -140,46 +144,66 @@ fun LoginScreen(navController: NavController) {
 
                     Checkbox(
                         checked = isChecked,
-                        onCheckedChange = { isChecked = it },
+                        onCheckedChange = {
+                            isChecked = it
+                            if (it) {
+                                userManager.saveUserData(usernameState.value, passwordState.value)
+                            } else {
+                                userManager.clearUserData()
+                            }
+                        },
                         colors = CheckboxDefaults.colors(
                             checkedColor = buttonColor,
-                            uncheckedColor = Color.White,
-
+                            uncheckedColor = Color.White
                         )
                     )
                 }
                 Spacer(modifier = Modifier.height(8.dp))
 
+                var authenticationState by remember { mutableStateOf(AuthenticationState.INITIAL) }
                 val scope = rememberCoroutineScope()
+                val showUnsuccessfulDialog = remember {mutableStateOf(false)}
+
+                val emptyFieldsList = remember { mutableStateOf(emptyList<String>()) }
+                val showEmptyFieldsDialog = remember { mutableStateOf(false) }
+                
                 Button(
                     onClick = {
                         scope.launch {
                             val username = usernameState.value
                             val password = passwordState.value
-                            val success = checkCredentials(username, password)
-                            if (success) {
-                                //get name and group from scraper [in the future]
-                                val name = "your name"
-                                val group = "your group"
-                                navController.navigate("main/$username/$name/$group")
+
+                            val emptyFields = validateFields(username, password)
+
+                            if(emptyFields.isEmpty()) {
+                                authenticationState =
+                                    if (ApiClient.logInDatabase(username, password)) {
+                                        AuthenticationState.AUTHENTICATED
+                                    } else {
+                                        AuthenticationState.UNAUTHENTICATED
+                                    }
+
+                                when (authenticationState) {
+                                    AuthenticationState.AUTHENTICATED -> {
+
+                                        val name = ApiClient.getFirstName(username)
+                                        val group = ApiClient.getGroup(username)
+                                        navController.navigate("main/$username/$name/$group")
+                                    }
+
+                                    AuthenticationState.UNAUTHENTICATED -> {
+                                        showUnsuccessfulDialog.value = true
+                                    }
+
+                                    else -> {
+                                        showUnsuccessfulDialog.value = true
+                                    }
+                                }
                             } else {
-                                // Аутентификация не удалась, выполните нужные действия
-                                // Например, показать сообщение об ошибке
+                                showEmptyFieldsDialog.value = true
+                                emptyFieldsList.value = emptyFields
                             }
                         }
-                        /*scope.launch {
-                            val success = viewModel.performLogin(usernameState.value, passwordState.value)
-                            if (success) {
-                                val username = usernameState.value
-                                //get name and group from scraper [in the future]
-                                val name = "your name"
-                                val group = "your group"
-                                navController.navigate("main/$username/$name/$group")
-                            } else {
-                                // Аутентификация не удалась, выполните нужные действия
-                                // Например, показать сообщение об ошибке
-                            }
-                        }*/
                     },
                     colors = ButtonDefaults.buttonColors(Color(0xFF7289DA)),
                     modifier = Modifier
@@ -195,7 +219,61 @@ fun LoginScreen(navController: NavController) {
                     )
                 }
 
+
+
+                if (showEmptyFieldsDialog.value) {
+                    EmptyStateAlertDialog(
+                        emptyFieldsList.value,
+                        onClose = {
+                            showEmptyFieldsDialog.value = false
+                        }
+                    )
+                }
+
+                if(showUnsuccessfulDialog.value) {
+                    WrongLoginAlertDialog {
+                        showUnsuccessfulDialog.value = false
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(16.dp))
+
+                val showScheduleButton = remember { mutableStateOf(false) }
+
+                if (isChecked) {
+                    val username = usernameState.value
+                    val scheduleDao = DatabaseManager.getDatabase().scheduleDao()
+
+                    LaunchedEffect(username) {
+                        val scheduleEntity = withContext(Dispatchers.IO) {
+                            scheduleDao.getScheduleByUsername(username)
+                        }
+
+                        if (scheduleEntity != null) {
+                            showScheduleButton.value = true
+                        }
+                    }
+                }
+
+                if (showScheduleButton.value) {
+                    Button(
+                        onClick = {
+                            navController.navigate("offline-schedule/${usernameState.value}")
+                        },
+                        colors = ButtonDefaults.buttonColors(Color(0xFF7289DA)),
+                        modifier = Modifier
+                            .align(Alignment.CenterHorizontally)
+                            .fillMaxWidth()
+                            .height(50.dp)
+                    ) {
+                        Text(
+                            text = "Schedule",
+                            color = textColor,
+                            fontSize = 18.sp,
+                            fontFamily = FontFamily(Font(R.font.dank_mono)),
+                            modifier = Modifier.align(Alignment.CenterVertically))
+                    }
+                }
 
                 Spacer(Modifier.height(8.dp))
 
@@ -212,19 +290,13 @@ fun LoginScreen(navController: NavController) {
                         modifier = Modifier.align(Alignment.CenterVertically)
                     )
                 }
+
+
             }
         }
 
     }
 }
-
-suspend fun checkCredentials(username: String, password: String): Boolean {
-    return withContext(Dispatchers.IO) {
-        val user = DatabaseManager.getDatabase().userDao().getUserByUsername(username)
-        return@withContext user != null && user.password == password
-    }
-}
-
 @Composable
 fun UsernameTextField(textColor: Color, usernameState: MutableState<String>) {
     val buttonColor = Color(0xFF7289DA)
@@ -250,8 +322,8 @@ fun UsernameTextField(textColor: Color, usernameState: MutableState<String>) {
             .height(50.dp)
             .background(Color.Transparent)
             .border(1.dp, buttonColor, RoundedCornerShape(30.dp))
-            .padding(12.dp)
-    )
+            .padding(12.dp),
+        )
 }
 
 @Composable
@@ -280,7 +352,7 @@ fun PasswordTextField(textColor: Color, passwordState: MutableState<String>) {
             .height(50.dp)
             .background(Color.Transparent)
             .border(1.dp, buttonColor, RoundedCornerShape(30.dp))
-            .padding(12.dp)
+            .padding(12.dp),
     )
 }
 
@@ -298,4 +370,64 @@ fun GradientBackgroundBrush(isVerticalGradient: Boolean, colors: List<Color>): B
     )
 }
 
+@Composable
+fun WrongLoginAlertDialog(onClose: () -> Unit) {
+    AlertDialog(
+        containerColor = Color(0xffbbd0ff),
+        onDismissRequest = {
+            onClose()
+        },
+        title = {
+            Text(
+                text = "Warning",
+                color = Color.White,
+                fontSize = 18.sp,
+                fontFamily = FontFamily(Font(R.font.dank_mono))
+            )
+        },
+        text = {
+            Text(
+                text = "wrong login or password",
+                fontSize = 16.sp,
+                color = Color.White,
+                fontFamily = FontFamily(Font(R.font.dank_mono))
+            )
+        },
+        confirmButton = {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Button(
+                    onClick = {
+                        onClose()
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        Color(0xFF7289DA)
+                    ),
+                ) {
+                    Text(
+                        text = "ok :c",
+                        color = Color.White,
+                        fontFamily = FontFamily(Font(R.font.dank_mono))
+                    )
+                }
+            }
+        }
+    )
+}
+
+
+fun validateFields(username: String, password: String): List<String> {
+    val emptyFields = mutableListOf<String>()
+    if (username.isEmpty()) {
+        emptyFields.add("Username")
+    }
+    if (password.isEmpty()) {
+        emptyFields.add("Password")
+    }
+    return emptyFields
+}
 

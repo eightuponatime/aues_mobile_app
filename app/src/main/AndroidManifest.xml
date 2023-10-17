@@ -7,16 +7,16 @@
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
-        android:icon="@mipmap/ic_launcher"
-        android:label="@string/app_name"
-        android:roundIcon="@mipmap/ic_launcher_round"
+        android:icon="@drawable/better_logo"
+        android:label="aues@{scrape.it}"
+        android:roundIcon="@drawable/better_logo"
         android:supportsRtl="true"
         android:theme="@style/Theme.Messenger"
         tools:targetApi="31">
         <activity
             android:name=".application.MainActivity"
             android:exported="true"
-            android:label="@string/app_name"
+            android:label="aues@{scrape.it}"
             android:theme="@style/Theme.Messenger">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -25,5 +25,4 @@
             </intent-filter>
         </activity>
     </application>
-
 </manifest>

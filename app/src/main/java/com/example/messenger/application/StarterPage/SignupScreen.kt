@@ -1,7 +1,8 @@
-package com.example.messenger.application
+package com.example.messenger.application.StarterPage
 
-import org.jetbrains.exposed.sql.*
 
+import io.ktor.client.plugins.contentnegotiation.*
+import io.ktor.serialization.kotlinx.json.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -14,42 +15,29 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.MutableState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import androidx.room.Room
 import com.example.messenger.R
-import com.example.messenger.data.AppDatabase
 import com.example.messenger.data.DatabaseManager
 import com.example.messenger.data.UserEntity
-import com.example.messenger.network.ApiClient.apiService
-import kotlinx.coroutines.CoroutineScope
+import com.example.messenger.network.ApiClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.jetbrains.exposed.sql.transactions.transaction
 
 
 @Composable
@@ -120,6 +108,27 @@ fun SignupScreen(navController: NavController) {
                 }
                 Spacer(Modifier.height(16.dp))
 
+                val firstNameState = remember {
+                    mutableStateOf("")
+                }
+                FirstNameField(firstNameState = firstNameState, textColor = textColor)
+
+                Spacer(Modifier.height(8.dp))
+
+                val lastNameState = remember {
+                    mutableStateOf("")
+                }
+                LastNameField(lastNameState = lastNameState, textColor = textColor)
+
+                Spacer(Modifier.height(8.dp))
+
+                val groupState = remember {
+                    mutableStateOf("")
+                }
+                GroupField(groupState = groupState, textColor = textColor)
+
+                Spacer(Modifier.height(8.dp))
+
                 val usernameState = remember {
                     mutableStateOf("")
                 }
@@ -140,7 +149,7 @@ fun SignupScreen(navController: NavController) {
                         .padding(10.dp)
                 ) {
                     Text(
-                        text = "Enter username and password from platonus",
+                        text = "Enter username and password from aues portal",
                         color = Color.White,
                         fontSize = 14.sp,
                         fontFamily = FontFamily(Font(R.font.dank_mono)),
@@ -150,40 +159,37 @@ fun SignupScreen(navController: NavController) {
 
                 Spacer(Modifier.height(30.dp))
 
-                /*val context = LocalContext.current
-                val database = Room.databaseBuilder(
-                    context?.applicationContext ?: throw IllegalStateException("Context is null."),
-                    AppDatabase::class.java, "app-database"
-                ).build()*/
-
                 val scope = rememberCoroutineScope()
+
+                val emptyFieldsList = remember { mutableStateOf(emptyList<String>()) }
+                val showEmptyFieldsDialog = remember { mutableStateOf(false) }
 
                 Button(
                     onClick = {
                         scope.launch {
                             val username = usernameState.value
                             val password = passwordState.value
-                            val success = registerUser(username, password)
-                            if (success) {
-                                // Регистрация выполнена успешно
-                                showSuccessDialog.value = true
+                            val firstName = firstNameState.value
+                            val lastName = lastNameState.value
+                            val studyGroup = groupState.value
+
+                            val emptyFields = validateFields(username, password, firstName,
+                                lastName, studyGroup)
+
+                            if (emptyFields.isEmpty()) {
+                                val success = registerUser(username, password, firstName,
+                                    lastName, studyGroup)
+
+                                if (success) {
+                                    showSuccessDialog.value = true
+                                } else {
+                                    showUnsuccessDialog.value = true
+                                }
                             } else {
-                                showUnsuccessDialog.value = true
-                                // Пользователь с таким именем уже существует
+                                showEmptyFieldsDialog.value = true
+                                emptyFieldsList.value = emptyFields
                             }
                         }
-                        /*if (validateUserData(usernameState.value, passwordState.value)) {
-                            CoroutineScope(Dispatchers.IO).launch {
-                                val newUser = UserEntity(0, usernameState.value, passwordState.value)
-                                database.userDao().insert(newUser)
-
-                                val response = apiService.register(newUser) // Выполнение сетевого запроса
-
-                                withContext(Dispatchers.Main) {
-                                    showDialog.value = true
-                                }
-                            }
-                        }*/
                     },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -198,9 +204,18 @@ fun SignupScreen(navController: NavController) {
                     )
                 }
 
+                if (showEmptyFieldsDialog.value) {
+                    EmptyStateAlertDialog(
+                        emptyFieldsList.value,
+                        onClose = {
+                            showEmptyFieldsDialog.value = false
+                        }
+                    )
+                }
+
                 if (showSuccessDialog.value) {
                     RegistrationAlertDialog(navController) {
-                        showSuccessDialog.value = false // Закрыть диалог
+                        showSuccessDialog.value = false
                     }
                 }
                 if(showUnsuccessDialog.value) {
@@ -213,13 +228,14 @@ fun SignupScreen(navController: NavController) {
     }
 }
 
-
-suspend fun registerUser(username: String, password: String): Boolean {
+suspend fun registerUser(username: String, password: String, first_name: String,
+                         last_name: String, study_group: String): Boolean {
     return withContext(Dispatchers.IO) {
-        val existingUser = DatabaseManager.getDatabase().userDao().getUserByUsername(username)
-        return@withContext if (existingUser == null) {
+        val userExists = ApiClient.checkIfUserExists(username)
+        if (!userExists) {
             val newUser = UserEntity(username = username, password = password)
             DatabaseManager.getDatabase().userDao().insert(newUser)
+            ApiClient.sendUserDataToServer(username, password, first_name, last_name, study_group)
             true
         } else {
             false
@@ -228,9 +244,23 @@ suspend fun registerUser(username: String, password: String): Boolean {
 }
 
 
-/*fun validateUserData(username: String, password: String): Boolean {
-    // Выполните необходимую проверку данных, возвратите true, если данные корректны
-    // Например, можно добавить проверку наличия в базе данных и соответствие регулярным выражениям
-    return true // Измените на основе вашей проверки
-}*/
+fun validateFields(username: String, password: String, firstName: String, lastName: String, studyGroup: String): List<String> {
+    val emptyFields = mutableListOf<String>()
+    if (username.isEmpty()) {
+        emptyFields.add("Username")
+    }
+    if (password.isEmpty()) {
+        emptyFields.add("Password")
+    }
+    if (firstName.isEmpty()) {
+        emptyFields.add("First Name")
+    }
+    if (lastName.isEmpty()) {
+        emptyFields.add("Last Name")
+    }
+    if (studyGroup.isEmpty()) {
+        emptyFields.add("Study Group")
+    }
+    return emptyFields
+}
 

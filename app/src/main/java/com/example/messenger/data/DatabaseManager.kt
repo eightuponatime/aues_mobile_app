@@ -10,7 +10,9 @@ object DatabaseManager {
         database = Room.databaseBuilder(
             context.applicationContext,
             MyAppDatabase::class.java, "app-database"
-        ).build()
+        )
+            .fallbackToDestructiveMigration()
+            .build()
     }
 
     fun getDatabase(): MyAppDatabase {
